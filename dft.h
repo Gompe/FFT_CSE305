@@ -16,6 +16,14 @@
 class BaseDft {
 public:
     static void Transform(const Complex *x, Complex *out, int N, int stride=1);
+    static void InverseTransform(const Complex *x, Complex *out, int N, int stride=1);
+
+    static void ImplementationTransforms(
+        const Complex *x, 
+        Complex *out, 
+        int N, 
+        int stride,  
+        bool is_inverse);
 };
 
 /// Recursive O(N log N) DFT calculator
@@ -24,14 +32,28 @@ class RecursiveFft {
     static int m_base_case_size;
 public:
     static void Transform(const Complex *x, Complex *out, int N, int stride=1);
-private:
-    static void TransformImpl(const Complex *x, Complex *out, int N, int stride);
+    static void InverseTransform(const Complex *x, Complex *out, int N, int stride=1);
+
+    static void ImplementationTransforms(
+        const Complex *x, 
+        Complex *out, 
+        int N, 
+        int stride,  
+        bool is_inverse);
 };
 
 /// Iterative O(N log N) DFT Calculator
 class IterativeFft {
 public:
     static void Transform(const Complex *x, Complex *out, int N, int stride=1);
+    static void InverseTransform(const Complex *x, Complex *out, int N, int stride=1);
+
+    static void ImplementationTransforms(
+        const Complex *x, 
+        Complex *out, 
+        int N, 
+        int stride,  
+        bool is_inverse);
 };
 
 #endif

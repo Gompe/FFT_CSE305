@@ -54,16 +54,20 @@ int main()
     }
 
     auto func1 = [](){ RecursiveFft::Transform(x, y, N); };
-    auto func2 = [](){ IterativeFft::Transform(x, z, N);};
+    auto func2 = [](){ RecursiveFft::InverseTransform(y, z, N);};
 
-    timeFunction(func1, "Base DFT");
-    timeFunction(func2, "Iterative");
+    timeFunction(func1, "FFT");
+    timeFunction(func2, "Inverse FFT");
 
-    if(checkIsClose(y, z, N)) {
+    if(checkIsClose(x, z, N)) {
         std::cout << "Code ok" << std::endl;
     } else {
         std::cout << "Code not ok" << std::endl;
     }
+
+    // PrintArray(x, N);
+    // PrintArray(y, N);
+    // PrintArray(z, N);
 
     return 0;
 }
