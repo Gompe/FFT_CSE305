@@ -5,10 +5,8 @@
 
 #include <random>
 
-#include "fft_types.h"
-#include "my_timer.h"
-
-#include "dft.h"
+#include <tests/benchmark_timer.h>
+#include <core/dft.h>
 
 template <typename T>
 void PrintArray(T* array, size_t N) {

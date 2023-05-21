@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 
-#include "fft_types.h"
+#include <core/fft_types.h>
 
 namespace fft_utils {
     inline bool IsPowerOfTwo(size_t N) {

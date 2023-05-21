@@ -9,8 +9,8 @@
 #include <thread>
 #include <future>
 
-#include "fft_types.h"
-#include "fft_utils.h"
+#include <core/fft_types.h>
+#include <core/fft_utils.h>
 
 /// O(N^2) DFT calculator
 class BaseDft {

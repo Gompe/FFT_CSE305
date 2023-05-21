@@ -3,5 +3,5 @@
 #include <complex>
 #include <vector>
 
-#define FloatType float
+#define FloatType long double
 #define Complex std::complex<FloatType>

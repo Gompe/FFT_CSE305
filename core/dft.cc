@@ -6,7 +6,7 @@
  * integers. That is: N <= 2,147,483,647.
 */
 
-#include "dft.h"
+#include <core/dft.h>
 
 #define DFT_CC_DEBUG 1
 
