@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <cassert>
 
 #include <core/fft_types.h>
 
@@ -38,6 +39,39 @@ namespace fft_utils {
 
         n_reversed >>= (max_n_bits - n_bits);
         return n_reversed;
+    }
+
+    // BitReversalPermutation permutes the values in [first...last] using the
+    // bit reversal permutation. It stores the output starting at d_first.
+    //  It is allowed that d_first == first.
+    // It is required that first, last, d_first are Random Access Iterators with
+    // std::distance(first, last) being a power of 2.
+    template < class InputIt, class OutputIt >
+    inline void BitReversalPermutation(InputIt first, InputIt last, OutputIt d_first) {
+        const int N = std::distance(first, last);
+        const int logN = IntLog2(N);
+
+        assert(IsPowerOfTwo(N));
+
+        for (int i = 0; i < N; i++) {
+            int j = fft_utils::ReverseBits(i, logN);
+
+            // Here we want to make d_first[i] = first[j] and d_first[j] = first[i]
+            // The following code ensures that there are no problems if first==d_first
+
+            if (j < i) {
+                // Already swapped i and j
+                continue; 
+            }
+
+            if (d_first == first) {
+                std::swap(d_first[i], d_first[j]);
+            }
+            else {
+                d_first[i] = first[j];
+                d_first[j] = first[i];
+            }
+        }
     }
 
     inline Complex RootOfUnity(int N, int k) {
