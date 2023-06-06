@@ -1,5 +1,7 @@
-#ifndef DFT_H_
-#define DFT_H_
+#pragma once
+
+#ifndef CORE_PARALLEL_DFT_H
+#define CORE_PARALLEL_DFT_H
 
 #include <iostream>
 #include <algorithm>
@@ -9,35 +11,26 @@
 #include <thread>
 #include <future>
 
+#include <core/parallel.h>
 #include <core/fft_types.h>
 #include <core/fft_utils.h>
 
-#define RECURSIVE_FFT_BASE_CASE_SIZE 1
-
 namespace dft_detail {
-    template < class InputIt, class OutputIt >
-    bool IsMemEqual (InputIt first, OutputIt d_first) {
-        const void *mem_addr_src = (void *) (& (*first));
-        const void *mem_addr_dst = (void *) (& (*d_first));
+    template < class InputIt, class OutputIt, class ImplParallel, class Parallelizer >
+    struct WrapperParallel {
 
-        return (mem_addr_src == mem_addr_dst);
-    }
-
-    template < class InputIt, class OutputIt, class Impl >
-    struct Wrapper {
-
-        void call(InputIt first, InputIt last, OutputIt d_first, bool is_inverse_transform) {
+        void call(InputIt first, InputIt last, OutputIt d_first, bool is_inverse_transform, const Parallelizer& parallelizer) {
 
             const bool condition = IsMemEqual(first, d_first);
             const size_t N = std::distance(first, last);
             using ComplexType = typename std::iterator_traits<OutputIt>::value_type;
 
             if (!condition) {
-                Impl{}.template operator()<InputIt, OutputIt>(first, last, d_first, 1, is_inverse_transform);
+                ImplParallel{}.template operator()<InputIt, OutputIt, Parallelizer>(first, last, d_first, 1, is_inverse_transform, parallelizer);
             }
             else {
                 std::vector<ComplexType> storage(N);
-                Impl{}.template operator()<InputIt, typename std::vector<ComplexType>::iterator>(first, last, storage.begin(), 1, is_inverse_transform);
+                ImplParallel{}.template operator()<InputIt, typename std::vector<ComplexType>::iterator, Parallelizer>(first, last, storage.begin(), 1, is_inverse_transform, parallelizer);
                 std::copy(storage.begin(), storage.end(), d_first);
             }
 
@@ -48,19 +41,20 @@ namespace dft_detail {
     };
 }
 
+
 // Implements O(N^2) dft
 namespace base_dft {
 
-    struct ImplDFT {
-        template < class InputIt, class OutputIt >
+    struct ImplParallelDFT {
+        template < class InputIt, class OutputIt, typename Parallelizer >
         void operator()(InputIt first, InputIt last, OutputIt d_first, size_t stride,
-                        bool is_inverse_transform) {
+                        bool is_inverse_transform, const Parallelizer& parallelizer) {
             using ComplexType = typename std::iterator_traits<OutputIt>::value_type; 
 
             const size_t N = std::distance(first, last);
             const size_t n = 1 + (N - 1)/stride;
 
-            for (size_t k = 0; k < n; k++) {
+            const auto task = [&](int k) {
                 ComplexType twiddle = (ComplexType) fft_utils::RootOfUnity(n, is_inverse_transform ? k : -((int) k));
 
                 d_first[k] = (ComplexType) 0;
@@ -72,31 +66,35 @@ namespace base_dft {
                     // twiddle_factor = root_of_unity^(k * (m+1)) afte the following line
                     twiddle_factor *= twiddle;
                 }
-            }
+            };
+
+            parallelizer.parallel_for(0, n, task);
         }
     };
 
-    template < class InputIt, class OutputIt >
-    void DFT(InputIt first, InputIt last, OutputIt d_first) {
-        dft_detail::Wrapper<InputIt, OutputIt, ImplDFT> wrapper;
-        wrapper.call(first, last, d_first, false);
+    template < class InputIt, class OutputIt, class Parallelizer >
+    void ParallelDFT(InputIt first, InputIt last, OutputIt d_first, const Parallelizer& parallelizer) {
+        dft_detail::WrapperParallel<InputIt, OutputIt, ImplParallelDFT, Parallelizer> wrapper;
+        wrapper.call(first, last, d_first, false, parallelizer);
     }
 
-    template < class InputIt, class OutputIt >
-    void IDFT(InputIt first, InputIt last, OutputIt d_first) {
-        dft_detail::Wrapper<InputIt, OutputIt, ImplDFT> wrapper;
-        wrapper.call(first, last, d_first, true);
+    template < class InputIt, class OutputIt, class Parallelizer >
+    void ParallelIDFT(InputIt first, InputIt last, OutputIt d_first, const Parallelizer& parallelizer) {
+        dft_detail::WrapperParallel<InputIt, OutputIt, ImplParallelDFT, Parallelizer> wrapper;
+        wrapper.call(first, last, d_first, true, parallelizer);
     } 
+
 }; // namespace base_dft
 
 namespace recursive_fft {
     // Implementation inspired by pseudocode in
     // https://en.wikipedia.org/wiki/Cooley%E2%80%93Tukey_FFT_algorithm
 
-    struct ImplDFT {
-        template < class InputIt, class OutputIt >
+    struct ImplParallelDFT {
+
+        template < class InputIt, class OutputIt, typename Parallelizer >
         void operator()(InputIt first, InputIt last, OutputIt d_first, size_t stride,
-                        bool is_inverse_transform) {
+                        bool is_inverse_transform, const Parallelizer& parallelizer) {
             
             using ComplexType = typename std::iterator_traits<OutputIt>::value_type; 
 
@@ -113,11 +111,19 @@ namespace recursive_fft {
             }
             assert(n % 2 == 0);
 
-            // Even terms 0, 2*stride, 4*stride,...
-            this->template operator()<InputIt, OutputIt>(first, last, d_first, 2*stride, is_inverse_transform);
 
-            // Odd terms 1*stride, 3*stride, ...
-            this->template operator()<InputIt, OutputIt>(first + stride, last, d_first + n/2, 2*stride, is_inverse_transform);
+            const auto task1 = [&]() {
+                // Even terms 0, 2*stride, 4*stride,...
+                this->template operator()<InputIt, OutputIt, Parallelizer>(first, last, d_first, 2*stride, is_inverse_transform, parallelizer);
+            };
+
+            const auto task2 = [&]() {
+                // Odd terms 1*stride, 3*stride, ...
+                this->template operator()<InputIt, OutputIt, Parallelizer>(first + stride, last, d_first + n/2, 2*stride, is_inverse_transform, parallelizer);
+            };
+
+            const std::vector< std::function<void(void)> > tasks = {task1, task2};
+            parallelizer.parallel_calls(tasks);
 
             // exp(2PI i/n) if IDFT
             // else exp(-2PI i/n)
@@ -136,16 +142,16 @@ namespace recursive_fft {
         } 
     };
 
-    template < class InputIt, class OutputIt >
-    void DFT(InputIt first, InputIt last, OutputIt d_first) {
-        dft_detail::Wrapper<InputIt, OutputIt, ImplDFT> wrapper;
-        wrapper.call(first, last, d_first, false);
+    template < class InputIt, class OutputIt, class Parallelizer >
+    void ParallelDFT(InputIt first, InputIt last, OutputIt d_first, const Parallelizer& parallelizer) {
+        dft_detail::WrapperParallel<InputIt, OutputIt, ImplParallelDFT, Parallelizer> wrapper;
+        wrapper.call(first, last, d_first, false, parallelizer);
     }
 
-    template < class InputIt, class OutputIt >
-    void IDFT(InputIt first, InputIt last, OutputIt d_first) {
-        dft_detail::Wrapper<InputIt, OutputIt, ImplDFT> wrapper;
-        wrapper.call(first, last, d_first, true);
+    template < class InputIt, class OutputIt, class Parallelizer >
+    void ParallelIDFT(InputIt first, InputIt last, OutputIt d_first, const Parallelizer& parallelizer) {
+        dft_detail::WrapperParallel<InputIt, OutputIt, ImplParallelDFT, Parallelizer> wrapper;
+        wrapper.call(first, last, d_first, true, parallelizer);
     } 
 }; // namespace recursive_fft
 
@@ -153,10 +159,11 @@ namespace iterative_fft {
     // Implementation inspired by the code at 
     // https://github.com/roguh/cuda-fft/blob/069554b979d9ce82257bf3d3efa2a386d3abc2a1/main.cu#L247
     
-    struct ImplDFT {
-        template < class InputIt, class OutputIt >
+    struct ImplParallelDFT {
+
+        template < class InputIt, class OutputIt, typename Parallelizer >
         void operator()(InputIt first, InputIt last, OutputIt d_first, size_t stride,
-                        bool is_inverse_transform) {
+                        bool is_inverse_transform, const Parallelizer& parallelizer) {
             
             using ComplexType = typename std::iterator_traits<OutputIt>::value_type; 
 
@@ -179,9 +186,11 @@ namespace iterative_fft {
                 // twiddle = exp(-2 PI i / 2^s)
                 ComplexType twiddle = (ComplexType) fft_utils::RootOfUnity(fft_utils::PowerOfTwo(s), -transform_sign);
 
+
                 // Iterate through out in strides of length m=2**s
                 // Set k to 0, 2^s, 2 * 2^s, 3 * 2^s, ..., N-2^s
-                for (size_t k = 0; k < n; k += fft_utils::PowerOfTwo(s)) {
+                const auto task = [&](int k) {
+                    k *= fft_utils::PowerOfTwo(s);
                     ComplexType twiddle_factor = (ComplexType) 1;
 
                     for (size_t j = 0; j < (size_t) fft_utils::PowerOfTwo(s-1); j++) {
@@ -192,22 +201,24 @@ namespace iterative_fft {
 
                         twiddle_factor *= twiddle;
                     }
-                }
+                };
+                parallelizer.parallel_for(0,  n / fft_utils::PowerOfTwo(s), task);
             }
         }
     }; 
 
-    template < class InputIt, class OutputIt >
-    void DFT(InputIt first, InputIt last, OutputIt d_first) {
-        dft_detail::Wrapper<InputIt, OutputIt, ImplDFT> wrapper;
-        wrapper.call(first, last, d_first, false);
+    template < class InputIt, class OutputIt, class Parallelizer >
+    void ParallelDFT(InputIt first, InputIt last, OutputIt d_first, const Parallelizer& parallelizer) {
+        dft_detail::WrapperParallel<InputIt, OutputIt, ImplParallelDFT, Parallelizer> wrapper;
+        wrapper.call(first, last, d_first, false, parallelizer);
     }
 
-    template < class InputIt, class OutputIt >
-    void IDFT(InputIt first, InputIt last, OutputIt d_first) {
-        dft_detail::Wrapper<InputIt, OutputIt, ImplDFT> wrapper;
-        wrapper.call(first, last, d_first, true);
+    template < class InputIt, class OutputIt, class Parallelizer >
+    void ParallelIDFT(InputIt first, InputIt last, OutputIt d_first, const Parallelizer& parallelizer) {
+        dft_detail::WrapperParallel<InputIt, OutputIt, ImplParallelDFT, Parallelizer> wrapper;
+        wrapper.call(first, last, d_first, true, parallelizer);
     } 
 }; // namespace iterative_fft
+
 
 #endif

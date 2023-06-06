@@ -10,7 +10,7 @@
 
 template < class InputIt, class OutputIt >
 static void ImplModularFft(InputIt first, InputIt last, OutputIt d_first,
-                            nt::LL p, nt::LL g, bool is_inverse_transform) {
+                            nt::Integer p, nt::Integer g, bool is_inverse_transform) {
     
     const int N = std::distance(first, last);
     const int logN = fft_utils::IntLog2(N);
@@ -35,23 +35,20 @@ static void ImplModularFft(InputIt first, InputIt last, OutputIt d_first,
     }
 
     // omega^N === 1 (mod p) since k*N == p-1
-    nt::LL omega = nt::ModularExponentiation(g, k, p);
+    nt::Integer omega = nt::ModularExponentiation(g, k, p);
 
     for (int s = 1; s <= logN; s++) {
         // twiddle is a 2^s root of unity mod p.
-        nt::LL twiddle = nt::ModularExponentiation(omega, fft_utils::PowerOfTwo(logN - s), p);
+        nt::Integer twiddle = nt::ModularExponentiation(omega, fft_utils::PowerOfTwo(logN - s), p);
 
-        #ifdef OPEN_MP
-            #pragma omp parallel for
-        #endif
         for (int k = 0; k < N; k += fft_utils::PowerOfTwo(s)) {
-            nt::LL twiddle_factor = 1;
+            nt::Integer twiddle_factor = 1;
 
             // Set both halves of the out array at the same time
             // j = 1, 4, 8, 16, ..., N / 2
             for (int j = 0; j < fft_utils::PowerOfTwo(s-1); j++) {
-                nt::LL a = d_first[k + j];
-                nt::LL b = (twiddle_factor * d_first[k + j + fft_utils::PowerOfTwo(s-1)]) % p;
+                nt::Integer a = d_first[k + j];
+                nt::Integer b = (twiddle_factor * d_first[k + j + fft_utils::PowerOfTwo(s-1)]) % p;
 
                 // Compute pow(twiddle, j)
                 twiddle_factor = (twiddle_factor * twiddle) % p;
@@ -70,14 +67,14 @@ static void ImplModularFft(InputIt first, InputIt last, OutputIt d_first,
 }
 
 template < class InputIt, class OutputIt >
-void ModularFftTransform(InputIt first, InputIt last, OutputIt d_first, nt::LL p,
-                         nt::LL g) {
+void ModularFftTransform(InputIt first, InputIt last, OutputIt d_first, nt::Integer p,
+                         nt::Integer g) {
     ImplModularFft(first, last, d_first, p, g, false);
 }
 
 template < class InputIt, class OutputIt >
-void ModularFftInverseTransform(InputIt first, InputIt last, OutputIt d_first, nt::LL p,
-                         nt::LL g) {
+void ModularFftInverseTransform(InputIt first, InputIt last, OutputIt d_first, nt::Integer p,
+                         nt::Integer g) {
 
     ImplModularFft(first, last, d_first, p, g, true);
 

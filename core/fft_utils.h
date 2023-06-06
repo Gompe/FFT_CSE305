@@ -74,9 +74,9 @@ namespace fft_utils {
         }
     }
 
-    inline Complex RootOfUnity(int N, int k) {
+    inline std::complex<double> RootOfUnity(int N, int k) {
         // Returns exp(i*2*pi*k/N)
-        FloatType theta = 2 * M_PI * k / (FloatType) N;
-        return Complex(cos(theta), sin(theta));
+        double theta = 2 * M_PI * k / (double) N;
+        return std::complex<double> (cos(theta), sin(theta));
     }
 };

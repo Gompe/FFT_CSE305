@@ -12,14 +12,14 @@ void PrintVec(std::vector<T> vec) {
 int main() {
 
     int n = 5;
-    nt::LL N = 1 << n;
-    nt::LL p = nt::FindPrimeInAP(N);
-    nt::LL g = nt::PrimitiveRootModPrime(p);
+    nt::Integer N = 1 << n;
+    nt::Integer p = nt::FindPrimeInAP(N);
+    nt::Integer g = nt::PrimitiveRootModPrime(p);
 
     printf("N = %d, p = %d, g = %d \n", N, p);
     
-    std::vector<nt::LL> integers(N);
-    std::vector<nt::LL> out(N);
+    std::vector<nt::Integer> integers(N);
+    std::vector<nt::Integer> out(N);
 
     for (int i=0; i<N; i++) {
         integers[i] = i;

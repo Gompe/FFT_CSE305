@@ -8,6 +8,10 @@
 #include <tests/benchmark_timer.h>
 #include <core/dft.h>
 
+#include <core/parallel_dft.h>
+
+#include <unistd.h>
+
 template <typename T>
 void PrintArray(T* array, size_t N) {
     for (size_t i=0; i<N; i++)
@@ -40,32 +44,178 @@ bool checkIsClose(Complex *a, Complex *b, size_t N, FloatType eps=1E-3) {
     return true;
 }
 
-// const int N = 1 << 20;
-const int N = 1 << 20;
+void TestSequentialFFT() {
+    constexpr FloatType max_val = 1000;
+    constexpr size_t N = 1 << 12;
 
-Complex x[N], y[N], z[N];
+    std::vector<Complex> x(N);
+    for (size_t i=0; i<N; i++) {
+        x[i] = (rand() % 2*max_val) - max_val;
+    }
+
+    std::vector<Complex> d1(N), d2(N), d3(N);
+
+    auto func1 = [&](){ base_dft::DFT(x.begin(), x.end(), d1.begin()); };
+    auto func2 = [&](){ recursive_fft::DFT(x.begin(), x.end(), d2.begin());};
+    auto func3 = [&](){ iterative_fft::DFT(x.begin(), x.end(), d3.begin());};
+
+    timeFunction(func1, "Base");
+    timeFunction(func2, "Recursive");
+    timeFunction(func3, "Iterative");
+
+
+    assert(checkIsClose(d1.data(), d2.data(), N));
+    assert(checkIsClose(d2.data(), d3.data(), N));
+    assert(checkIsClose(d3.data(), d1.data(), N));
+
+
+    auto func4 = [&](){ base_dft::IDFT(d1.begin(), d1.end(), d1.begin()); };
+    auto func5 = [&](){ recursive_fft::IDFT(d2.begin(), d2.end(), d2.begin());};
+    auto func6 = [&](){ iterative_fft::IDFT(d3.begin(), d3.end(), d3.begin());};
+
+    timeFunction(func4, "Inv Base");
+    timeFunction(func5, "Inv Recursive");
+    timeFunction(func6, "Inv Iterative");
+
+
+    assert(checkIsClose(d1.data(), x.data(), N));
+    assert(checkIsClose(d2.data(), x.data(), N));
+    assert(checkIsClose(d3.data(), x.data(), N));
+
+}
+
+void TestParallelFor() {
+
+    const size_t N = 1 << 18;
+
+    std::atomic<int> par_sum(0);
+    int seq_sum = 0;
+
+    std::vector<int> array(N);
+
+    for (size_t i=0; i < N; i++) {
+        array[i] = rand() % 2;
+    }
+
+    auto parallel_sum = [&]() {
+        auto foo = [&](int i){
+            par_sum.fetch_add(array[i]);
+        };
+
+        FixedThreadsParallelizer parallelizer{6};
+        parallelizer.parallel_for(0, N, foo);
+    };
+
+    auto sequential_sum = [&]() {
+        for (auto x : array) {
+            seq_sum += x;
+        }
+    };
+
+    timeFunction(parallel_sum, "Parallel sum");
+    timeFunction(sequential_sum, "Sequential sum");
+
+    std::cout << "Parallel sum: " << par_sum << std::endl;
+    std::cout << "Sequential sum: " << seq_sum << std::endl;
+}
+
+void TestParallelCalls() {
+    const size_t N = 1 << 18;
+    const size_t num_funcs = 100;
+
+    std::atomic<int> par_sum(0);
+    int seq_sum = 0;
+
+    std::vector<int> array(N);
+
+    for (size_t i=0; i < N; i++) {
+        array[i] = rand() % 2;
+    }
+
+    std::vector<std::function<void(void)>> funcs(num_funcs);
+
+    size_t idx_begin = 0;
+    for (size_t i = 0; i < num_funcs; i++) {
+        const size_t idx_end = std::min(N, idx_begin + N/num_funcs);
+        funcs[i] = [&array, &par_sum, idx_begin, idx_end](){
+            for (size_t j = idx_begin; j < idx_end; j++) {
+                par_sum.fetch_add(array[j]);
+            }
+        };
+        idx_begin = idx_end;
+    }
+
+    auto parallel_sum = [&]() {
+        FixedThreadsParallelizer parallelizer{6};
+        parallelizer.parallel_calls(funcs);
+    };
+
+    auto sequential_sum = [&]() {
+        for (auto x : array) {
+            seq_sum += x;
+        }
+    };
+
+    timeFunction(parallel_sum, "Parallel sum");
+    timeFunction(sequential_sum, "Sequential sum");
+
+    std::cout << "Parallel sum: " << par_sum << std::endl;
+    std::cout << "Sequential sum: " << seq_sum << std::endl;
+}
+
+template <typename Parallelizer>
+void TestParallelDFT(size_t N, const Parallelizer &parallelizer) {
+    constexpr FloatType max_val = 1000;
+
+    std::vector<Complex> x(N);
+    for (size_t i=0; i<N; i++) {
+        x[i] = (rand() % 2*max_val) - max_val;
+    }
+
+    std::vector<Complex> d1(N), d2(N), d3(N), d_seq1(N), d_seq2(N), d_seq3(N);
+
+    // auto func_seq1 = [&](){ base_dft::DFT(x.begin(), x.end(), d_seq1.begin()); };
+    auto func_seq2 = [&](){ recursive_fft::DFT(x.begin(), x.end(), d_seq2.begin()); };
+    auto func_seq3 = [&](){ iterative_fft::DFT(x.begin(), x.end(), d_seq3.begin()); };
+
+    // auto func1 = [&](){ base_dft::ParallelDFT(x.begin(), x.end(), d1.begin(), parallelizer); };
+    auto func2 = [&](){ recursive_fft::ParallelDFT(x.begin(), x.end(), d2.begin(), parallelizer);};
+    auto func3 = [&](){ iterative_fft::ParallelDFT(x.begin(), x.end(), d3.begin(), parallelizer);};
+
+    // timeFunction(func_seq1, "Base - sequential");
+    timeFunction(func_seq2, "Recursive - sequential");
+    timeFunction(func_seq3, "Iterative - sequential");
+
+    // timeFunction(func1, "Base - parallel");
+    timeFunction(func2, "Recursive - parallel  ");
+    timeFunction(func3, "Iterative - parallel  ");
+
+
+    // assert(checkIsClose(d1.data(), d_seq3.data(), N));
+    assert(checkIsClose(d2.data(), d_seq3.data(), N));
+    assert(checkIsClose(d3.data(), d_seq3.data(), N));
+}
 
 int main()
-{   
-    for (int i=0; i<N; i++) {
-        x[i] = rand() % 2;
-    }
+{
+    size_t N = 1 << 24;
+    size_t num_threads = 4;
 
-    auto func1 = [](){ RecursiveFft::Transform(x, y, N); };
-    auto func2 = [](){ RecursiveFft::InverseTransform(y, z, N);};
+    std::cout << "Fixed Threads Parallelizer.\n";
+    FixedThreadsParallelizer parallelizer{num_threads};
+    TestParallelDFT(N, parallelizer);
 
-    timeFunction(func1, "FFT");
-    timeFunction(func2, "Inverse FFT");
+    std::cout << "OMP Parallelizer.\n";
+    OmpParallelizer omp_parallelizer{};
+    TestParallelDFT(N, omp_parallelizer);
 
-    if(checkIsClose(x, z, N)) {
-        std::cout << "Code ok" << std::endl;
-    } else {
-        std::cout << "Code not ok" << std::endl;
-    }
+    // std::cout << "Parallel For" << std::endl;
+    // TestParallelFor();
 
-    // PrintArray(x, N);
-    // PrintArray(y, N);
-    // PrintArray(z, N);
+    // std::cout << "Parallel Calls" << std::endl;
+    // TestParallelCalls();
+    // TestSequentialFFT();
+
 
     return 0;
 }

@@ -24,14 +24,14 @@ using Data = std::vector<FloatType>;
 using EncodedData = std::vector<EncodedItem>;
 
 EncodedData Compress(const std::vector<FloatType> &data, int num_frequencies=DEFAULT_NUM_FREQUENCIES);
-std::vector<FloatType> Decompress(const EncodedData &encoded_data, const int N);
+Data Decompress(const EncodedData &encoded_data, const int N);
 
 
 /// utils
-std::vector<FloatType> ReadDataFromStdin();
-// std::vector<FloatType> ReadDataFromFile(std::string filename);
+Data ReadDataFromStdin();
+// TODO: std::vector<FloatType> ReadDataFromFile(std::string filename);
 
-void WriteDataToStdout(const std::vector<FloatType> &data);
+void WriteDataToStdout(const Data &data);
 
 }; // namespace compressor
 
