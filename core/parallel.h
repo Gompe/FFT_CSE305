@@ -3,6 +3,8 @@
 #ifndef CORE_PARALLEL_H
 #define CORE_PARALLEL_H
 
+#include <core/dft.h>
+
 #include <functional>
 #include <thread>
 #include <atomic>

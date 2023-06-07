@@ -23,6 +23,10 @@ compressor: $(CORE_SRCS) $(CORE_DEPS) $(COMPRESSOR_SRCS) $(COMPRESSOR_DEPS)
 polynomial: $(CORE_SRCS) $(CORE_DEPS) $(NT_SRCS) $(NT_DEPS)
 	$(CXX) $(CXXFLAGS) $(INC) $(NT_SRCS) $(CORE_SRCS) $(LIBS) main_polynomial.cc -o polynomial.exe
 
+fft: $(CORE_SRCS) $(CORE_DEPS) 
+	$(CXX) $(CXXFLAGS) $(INC) $(CORE_SRCS) $(LIBS) main_fft.cc -o fft.exe
+
+
 # For the experiments:
 
 TEST_SRCS = $(CORE_SRCS) $(NT_SRCS)
