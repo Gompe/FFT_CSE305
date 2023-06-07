@@ -1,5 +1,3 @@
 main
-compressor.exe
-nt.exe
-poly.exe
+*.exe
 /.vscode

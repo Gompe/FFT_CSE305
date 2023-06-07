@@ -29,3 +29,5 @@ TEST_CMD = $(CXX) $(CXXFLAGS) $(INC) $(TEST_SRCS) $(LIBS)
 test_nt: $(TEST_SRCS) $(TEST) ./tests/test_nt.cc
 	$(TEST_CMD) ./tests/test_nt.cc -o test_nt.exe
 
+test_polynomial: $(TEST_SRCS) $(TEST) ./tests/test_polynomial.cc
+	$(TEST_CMD) ./tests/test_polynomial.cc -o test_polynomial.exe
