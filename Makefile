@@ -23,7 +23,9 @@ compressor: $(CORE_SRCS) $(CORE_DEPS) $(COMPRESSOR_SRCS) $(COMPRESSOR_DEPS)
 # For the experiments:
 
 TEST_SRCS = $(CORE_SRCS) $(NT_SRCS)
-TEST_DEPS = $(CORE_DEPS) $(NT_DEPS)
-TEST_CMD = $(CXX) $(CXXFLAGS) $(INC) $(CORE_SRCS) $(LIBS) 
+TEST_DEPS = $(CORE_DEPS) $(NT_DEPS) ./tests/benchmark_timer.h
+TEST_CMD = $(CXX) $(CXXFLAGS) $(INC) $(TEST_SRCS) $(LIBS) 
 
-test_nt: $(TEST_SRCS) $(TEST)
+test_nt: $(TEST_SRCS) $(TEST) ./tests/test_nt.cc
+	$(TEST_CMD) ./tests/test_nt.cc -o test_nt.exe
+

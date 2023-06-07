@@ -16,13 +16,9 @@ static int RoundDouble(const double x) {
     return static_cast <int>(x + 0.5 - (x < 0.0));
 }
 
-void TestChineseRemainderTheorem();
-void TestModularInverse();
 void TestIntegerPolynomialMultiplication(const size_t degree = 10000, const int max_coef = 10000);
 
 int main() {
-    TestChineseRemainderTheorem();
-    TestModularInverse();
     TestIntegerPolynomialMultiplication(40000, 1000);
 }
 
