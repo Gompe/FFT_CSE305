@@ -31,3 +31,10 @@ test_nt: $(TEST_SRCS) $(TEST) ./tests/test_nt.cc
 
 test_polynomial: $(TEST_SRCS) $(TEST) ./tests/test_polynomial.cc
 	$(TEST_CMD) ./tests/test_polynomial.cc -o test_polynomial.exe
+
+
+test_parallel: $(TEST_SRCS) $(TEST) ./tests/test_parallel.cc
+	$(TEST_CMD) ./tests/test_parallel.cc -o test_parallel.exe
+
+test_dft: $(TEST_SRCS) $(TEST) ./tests/test_dft.cc
+	$(TEST_CMD) ./tests/test_dft.cc -o test_dft.exe
