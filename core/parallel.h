@@ -72,7 +72,7 @@ private:
         ThreadGuard(ThreadGuard&&) = delete;
         ThreadGuard& operator=(const ThreadGuard&) = delete;
 
-        ThreadGuard(const FixedThreadsParallelizer *instance);
+        ThreadGuard(const FixedThreadsParallelizer *instance, const size_t max_num_threads = std::numeric_limits<size_t>::max());
         ~ThreadGuard();
     };    
 };

@@ -9,6 +9,7 @@
 #include <number_theory/number_theory.h>
 #include <core/modular_fft.h>
 
+#include <core/parallel.h>
 #include <numeric>
 
 template < class T >
@@ -29,9 +30,16 @@ private:
     std::vector<T> m_coefs = {(T) 0};
 
     void FixSize() {
-        while ( (m_coefs.size() >= 2) && (m_coefs[m_coefs.size() - 1] == (T) 0) ) {
-            m_coefs.pop_back();
+        size_t ptr = m_coefs.size() - 1;
+        while (ptr > 0 && m_coefs[ptr] == static_cast<T>(0)) {
+            ptr--;
         }
+
+        m_coefs.erase(m_coefs.begin() + ptr + 1, m_coefs.end());
+
+        // while ( (m_coefs.size() >= 2) && (m_coefs[m_coefs.size() - 1] == (T) 0) ) {
+        //     m_coefs.pop_back();
+        // }
     }
 
 public:
@@ -211,15 +219,34 @@ Polynomial<Complex> ComplexMultiply(const Polynomial<T1> &A, const Polynomial<T2
     std::vector<Complex> rep_A(N);
     std::vector<Complex> rep_B(N);
 
-    std::fill(rep_A.begin(), rep_A.end(), (Complex) 0);
-    std::fill(rep_B.begin(), rep_B.end(), (Complex) 0);
+    // Sequential Version of the code:
+    // std::fill(rep_A.begin(), rep_A.end(), (Complex) 0);
+    // std::fill(rep_B.begin(), rep_B.end(), (Complex) 0);
 
-    std::copy(A.ConstBegin(), A.ConstEnd(), rep_A.begin());
-    std::copy(B.ConstBegin(), B.ConstEnd(), rep_B.begin());
+    // std::copy(A.ConstBegin(), A.ConstEnd(), rep_A.begin());
+    // std::copy(B.ConstBegin(), B.ConstEnd(), rep_B.begin());
 
-    // Perform DFT inplace -> rep_A now is the value representation of polynomial
-    iterative_fft::DFT(rep_A.begin(), rep_A.end(), rep_A.begin());
-    iterative_fft::DFT(rep_B.begin(), rep_B.end(), rep_B.begin());
+    // // Perform DFT inplace -> rep_A now is the value representation of polynomial
+    // iterative_fft::DFT(rep_A.begin(), rep_A.end(), rep_A.begin());
+    // iterative_fft::DFT(rep_B.begin(), rep_B.end(), rep_B.begin());
+
+    // Perform the 2 FFTs in parallel (~2x Faster)
+    FixedThreadsParallelizer parallelizer(2);
+
+    auto TransformA = [&](){
+        std::fill(rep_A.begin(), rep_A.end(), (Complex) 0);
+        std::copy(A.ConstBegin(), A.ConstEnd(), rep_A.begin());
+        iterative_fft::DFT(rep_A.begin(), rep_A.end(), rep_A.begin());
+    };
+
+    auto TransformB = [&](){
+        std::fill(rep_B.begin(), rep_B.end(), (Complex) 0);
+        std::copy(B.ConstBegin(), B.ConstEnd(), rep_B.begin());
+        iterative_fft::DFT(rep_B.begin(), rep_B.end(), rep_B.begin());
+    };
+
+    std::vector<std::function<void(void)>> tasks = {TransformA, TransformB};
+    parallelizer.parallel_calls(tasks);
 
     // Multiply A * B in values domain
     std::vector<Complex> rep_AB(N);
@@ -279,9 +306,21 @@ Polynomial<nt::Integer> ModularMultiply(const Polynomial<nt::Integer> &A, const 
 
     const nt::Integer g = nt::PrimitiveRootModPrime(p);
 
+    // Perform the 2 FFTs in parallel
+    FixedThreadsParallelizer parallelizer(2);
+
+    auto TransformA = [&](){
+        ModularFftTransform(coefs_A.begin(), coefs_A.end(), values_A.begin(), p, g);
+    };
+
+    auto TransformB = [&](){
+        ModularFftTransform(coefs_B.begin(), coefs_B.end(), values_B.begin(), p, g);
+    };
+
     // Evaluate Polynomials A and B at Nth roots of unity mod p
-    ModularFftTransform(coefs_A.begin(), coefs_A.end(), values_A.begin(), p, g);
-    ModularFftTransform(coefs_B.begin(), coefs_B.end(), values_B.begin(), p, g);
+    std::vector<std::function<void(void)>> tasks = {TransformA, TransformB};
+    parallelizer.parallel_calls(tasks);
+
 
     const auto mul = [p](nt::Integer a, nt::Integer b) {
         return (a * b) % p;
@@ -312,23 +351,45 @@ Polynomial<nt::Integer> IntegerMultiply(const Polynomial<nt::Integer> &A, const 
     const nt::Integer N = fft_utils::PowerOfTwo(exponent);
 
     // We will compute the product AB modulo 2 different primes
-    constexpr size_t n_moduli = 2;
+    size_t n_moduli = 2;
     Polynomial<nt::Integer> polynomials[n_moduli];
 
-    auto primes = nt::FindPrimesInAP(N, n_moduli);
+    const auto primes = nt::FindPrimesInAP(N, n_moduli);
+
+    std::vector<std::function<void(void)>> tasks(n_moduli);
+
     for (size_t i = 0; i < n_moduli; i++) {
-        polynomials[i] = ModularMultiply(A, B, primes[i]);
+        tasks[i] = [&polynomials, &A, &B, &primes, i](){
+            polynomials[i] = ModularMultiply(A, B, primes[i]);
+        };
+        // polynomials[i] = ModularMultiply(A, B, primes[i]);
     }
 
+    FixedThreadsParallelizer parallelizer{};
+    parallelizer.parallel_calls(tasks);
+
+    // Now we recover the int coefficients from the CRT
     std::vector<nt::Integer> out_coefficients(degree_output + 1);
-    for (size_t k = 0; k <= degree_output; k++) {
+    auto find_coefficient = [&](int k) {
         std::vector<nt::Integer> remainders(n_moduli);
         for (size_t i = 0; i < n_moduli; i++) {
             remainders[i] = polynomials[i][k];
         } 
 
         out_coefficients[k] = nt::ChineseRemainderTheorem(remainders, primes);
-    }
+    };
+
+    parallelizer.parallel_for(0, degree_output + 1, find_coefficient);
+
+    // Sequential Version
+    // for (size_t k = 0; k <= degree_output; k++) {
+    //     std::vector<nt::Integer> remainders(n_moduli);
+    //     for (size_t i = 0; i < n_moduli; i++) {
+    //         remainders[i] = polynomials[i][k];
+    //     } 
+
+    //     out_coefficients[k] = nt::ChineseRemainderTheorem(remainders, primes);
+    // }
 
     // Make all coefficients to have the smallest possible norm while keeping
     // their modulo wrt each prime

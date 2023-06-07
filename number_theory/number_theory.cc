@@ -190,7 +190,7 @@ Integer ChineseRemainderTheorem(const std::vector<Integer> &remainders, const st
         const Integer Inv_i = MultiplicativeInverse(M_i, m_i);
 
         const Integer n_i = (M_i * Inv_i) % M;
-        solution = (solution + r_i * n_i) % M; 
+        solution = ((__int128_t) solution + (__int128_t) r_i * (__int128_t) n_i) % (__int128_t) M; 
     }
 
     return SafeMod(solution, M);
