@@ -30,7 +30,9 @@ static void PrintFft(const std::vector<Complex> &sequence) {
 int main(int argc, char **argv) {
 
     if (argc != 2) {
-        fprintf(stderr, "usage: %s num_frequencies", argv[0]);
+        printf("Usage: %s [num_frequencies]\n", argv[0]);
+        printf("\tnum_frequencies dictates the quality of the compression. \n");
+        printf("\tThe more frequencies you use, the better the approximation but the compression is smaller. \n");
         exit(1);
     }
 

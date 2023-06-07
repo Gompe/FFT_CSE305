@@ -1,4 +1,5 @@
 #include <compressor/compressor.h>
+#include <numeric>
 
 namespace compressor {
 
@@ -7,14 +8,22 @@ EncodedItem::EncodedItem(int index, Complex value)
 
 // Compress / Decompress functions
 EncodedData Compress(const Data &data, int num_frequencies) {
-    const int N = data.size();
+
+    const int N = (data.size() == 1) ? 1 : fft_utils::PowerOfTwo(fft_utils::IntLog2(data.size() - 1) + 1);
+
+    std::vector<Complex> resized_data(N);
+    std::copy(data.begin(), data.end(), resized_data.begin());
+
+    const double data_average = std::accumulate(data.begin(), data.end(), 0.) / data.size();
+    std::fill(resized_data.begin() + data.size(), resized_data.end(), data_average);
+
 
     // At most N frequencies can be captured by the FFT
     num_frequencies = std::min(N, num_frequencies);
 
     // Data on the frequency domain
     std::vector<Complex> data_freq(N);
-    iterative_fft::DFT(data.begin(), data.end(), data_freq.begin());
+    iterative_fft::DFT(resized_data.begin(), resized_data.end(), data_freq.begin());
 
     // Populate the EncodedData struct with frequency data
     EncodedData compressed_data(N);
@@ -35,12 +44,15 @@ EncodedData Compress(const Data &data, int num_frequencies) {
     return compressed_data;
 }
 
-Data Decompress(const EncodedData &encoded_data, const int N) {
+Data Decompress(const EncodedData &encoded_data, const int output_size) {
+
+    const int N = (output_size == 1) ? 1 : fft_utils::PowerOfTwo(fft_utils::IntLog2(output_size - 1) + 1);
 
     std::vector<Complex> frequency_data(N);
     std::fill(frequency_data.begin(), frequency_data.end(), (Complex) 0);
 
     for (const auto &item : encoded_data) {
+        assert(item.index >= 0 && item.index < N);
         frequency_data[item.index] = item.value;
     }
 
@@ -51,6 +63,7 @@ Data Decompress(const EncodedData &encoded_data, const int N) {
     std::transform(predecoded_data.begin(), predecoded_data.end(), decoded_data.begin(),
                     [](const Complex &x){ return x.real(); });
 
+    decoded_data.erase(decoded_data.begin() + output_size, decoded_data.end());
     return decoded_data;
 }
 
@@ -59,6 +72,11 @@ Data Decompress(const EncodedData &encoded_data, const int N) {
 Data ReadDataFromStdin() {
     int size_sequence;
     std::cin >> size_sequence;
+
+    if (size_sequence <= 0) {
+        printf("ERROR: the size of the sequence must be positive.\n");
+        exit(1);
+    }
 
     Data data(size_sequence);
 

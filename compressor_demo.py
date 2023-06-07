@@ -13,8 +13,13 @@ def CreateData(n):
     """
     N = 1 << n
     
-    periods = [2, 3, 20]
-    amplitudes = [2, 5, 10]
+    n_periods = np.random.randint(1, 10)
+
+    possible_periods = list(range(1, 21))
+    possible_amplitudes = list(range(1, 11))
+
+    periods = np.random.choice(possible_periods, n_periods, replace=False)
+    amplitudes = np.random.choice(possible_amplitudes, n_periods, replace=True)
 
     random_shift = [2* np.pi * np.random.random() for _ in periods]
 
@@ -44,6 +49,13 @@ def CreateStepData(n):
     data = data.astype('float32')
     return data
 
+def ShowApproximationQuality(data, r_data):
+    mae = np.linalg.norm(data - r_data, ord=1) / len(data)
+    mrse = np.sqrt(np.linalg.norm(data - r_data, ord=2) / len(data))
+
+    print("Mean Absolute Error:", round(mae, 3))
+    print("Mean Root Squared Error:", round(mrse, 3))
+
 def MakeInput(data):
     p_input = f"{len(data)} "
     p_input += " ".join([str(num) for num in data])
@@ -60,11 +72,24 @@ def ParseOutput(p_output):
 
 def Main():
     FILENAME = "./compressor.exe"
-    NUM_FREQUENCIES = 100
 
+    MODE = int(input("""Do you wish to create 
+        [1] Random Periodic Data (type 1)
+        [2] Pulse-like data (type 2)
+        Your choice: """))
+    
+    if MODE not in [1, 2]:
+        print("Invalid choice")
+        sys.exit()
+
+    NUM_FREQUENCIES = int(input("Choose the number of frequencies that you want to use for the compression: "))
     NUM_FREQUENCIES = str(NUM_FREQUENCIES).encode('utf-8')
 
-    data = CreateStepData(10)
+    if MODE == 1:
+        data = CreateData(10)
+    else:
+        data = CreateStepData(10)
+
     p_input = MakeInput(data)
 
     process = subprocess.run([FILENAME, NUM_FREQUENCIES], input=p_input, capture_output=True)
@@ -76,12 +101,16 @@ def Main():
         raise e
 
     p_output = process.stdout
+
     reconstructed_data = ParseOutput(p_output)
+
+    ShowApproximationQuality(data, reconstructed_data)
 
     fig, ax = plt.subplots(2, 1)
     sns.lineplot(data, ax=ax[0])
     sns.lineplot(reconstructed_data, ax=ax[1])
 
+    print("Showing reconstruction plot:")
     plt.show()
 
 if __name__ == "__main__":

@@ -20,6 +20,9 @@ compressor: $(CORE_SRCS) $(CORE_DEPS) $(COMPRESSOR_SRCS) $(COMPRESSOR_DEPS)
 	$(CXX) $(CXXFLAGS) $(INC) $(COMPRESSOR_SRCS) $(CORE_SRCS) $(LIBS) -o compressor.exe
 
 
+polynomial: $(CORE_SRCS) $(CORE_DEPS) $(NT_SRCS) $(NT_DEPS)
+	$(CXX) $(CXXFLAGS) $(INC) $(NT_SRCS) $(CORE_SRCS) $(LIBS) main_polynomial.cc -o polynomial.exe
+
 # For the experiments:
 
 TEST_SRCS = $(CORE_SRCS) $(NT_SRCS)

@@ -29,7 +29,6 @@ Data Decompress(const EncodedData &encoded_data, const int N);
 
 /// utils
 Data ReadDataFromStdin();
-// TODO: std::vector<FloatType> ReadDataFromFile(std::string filename);
 
 void WriteDataToStdout(const Data &data);
 
